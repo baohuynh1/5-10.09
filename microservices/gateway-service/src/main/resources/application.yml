@@ -1,0 +1,44 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      routes:
+        # http://localhost:8888/identity/api/auth/login  ->  http://localhost:8080/api/auth/login
+        - id: identity-service
+          uri: http://localhost:8080
+          predicates:
+            - Path=/identity/**
+          filters:
+            - StripPrefix=1   # bỏ 1 đoạn path đầu tiên: /identity
+
+        # http://localhost:8888/product/api/products  ->  http://localhost:8082/api/products
+        - id: product-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/product/**
+          filters:
+            - StripPrefix=1   # bỏ /product
+
+        # http://localhost:8888/api/courses/**  ->  http://localhost:8083/api/courses/**  (giữ nguyên path)
+        # Được bảo vệ bởi JwtAuthenticationGlobalFilter (xem app.gateway.secured-paths)
+        - id: course-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/courses/**
+
+app:
+  jwt:
+    # PHẢI giống hệt app.jwt.secret của identity-service
+    secret: ${JWT_SECRET:vS6K5vH8N2zB4xR9mQ3pL1wT7yC5vH8N2zB4xR9mQ3pL1wT7yC5vH8N2z}
+  gateway:
+    # Các path bắt buộc có JWT hợp lệ tại Gateway (phân cách bởi dấu phẩy, cú pháp Ant)
+    secured-paths: /api/courses,/api/courses/**
+
+# Bật log để thấy Gateway khớp route nào và chuyển tiếp đi đâu
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG

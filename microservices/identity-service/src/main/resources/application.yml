@@ -1,0 +1,34 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: identity-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/identity_db
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+app:
+  jwt:
+    # JJWT dùng trực tiếp bytes UTF-8 của chuỗi này làm khóa HMAC (58 ký tự = 464 bit >= 256 bit cho HS256)
+    secret: ${JWT_SECRET:vS6K5vH8N2zB4xR9mQ3pL1wT7yC5vH8N2zB4xR9mQ3pL1wT7yC5vH8N2z}
+    access-token-expiration: 900000       # 15 phút
+    refresh-token-expiration: 604800000   # 7 ngày
+
+  # Tài khoản ADMIN tạo sẵn khi khởi động (đổi mật khẩu qua biến môi trường khi triển khai thật)
+  admin:
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:admin123}

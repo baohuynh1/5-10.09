@@ -1,0 +1,473 @@
+{
+  "info": {
+    "name": "Gateway JWT Filter - /api/courses",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Chạy identity-service (8080), course-service (8083), gateway-service (8888). Run collection theo thứ tự."
+  },
+  "variable": [
+    {
+      "key": "gateway",
+      "value": "http://localhost:8888"
+    },
+    {
+      "key": "jwtSecret",
+      "value": "vS6K5vH8N2zB4xR9mQ3pL1wT7yC5vH8N2zB4xR9mQ3pL1wT7yC5vH8N2z"
+    },
+    {
+      "key": "studentToken",
+      "value": ""
+    },
+    {
+      "key": "instructorToken",
+      "value": ""
+    },
+    {
+      "key": "expiredToken",
+      "value": ""
+    },
+    {
+      "key": "badSignatureToken",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0a. Đăng ký STUDENT",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{gateway}}/identity/api/auth/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"bao\",\n  \"password\": \"123456\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 hoặc 409', () => pm.expect(pm.response.code).to.be.oneOf([201, 409]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "0b. Đăng ký INSTRUCTOR",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{gateway}}/identity/api/auth/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"thaygiao\",\n  \"password\": \"123456\",\n  \"role\": \"INSTRUCTOR\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 hoặc 409', () => pm.expect(pm.response.code).to.be.oneOf([201, 409]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "0c. Login STUDENT",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{gateway}}/identity/api/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"bao\",\n  \"password\": \"123456\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('studentToken', pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "0d. Login INSTRUCTOR",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{gateway}}/identity/api/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"thaygiao\",\n  \"password\": \"123456\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('instructorToken', pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. GET courses - không token → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{gateway}}/api/courses"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401', () => pm.response.to.have.status(401));",
+              "pm.test('Bị chặn tại Gateway (JSON 401)', () => pm.expect(pm.response.json().status).to.eql(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. GET courses - token HẾT HẠN → 401",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{expiredToken}}"
+          }
+        ],
+        "url": "{{gateway}}/api/courses"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401', () => pm.response.to.have.status(401));",
+              "pm.test('Bị chặn tại Gateway (JSON 401)', () => pm.expect(pm.response.json().status).to.eql(401));",
+              "pm.test('Thông báo hết hạn', () => pm.expect(pm.response.json().message).to.include('hết hạn'));"
+            ]
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Tự ký 1 JWT bằng secret dùng chung để test token hết hạn / sai chữ ký",
+              "const b64url = wa => CryptoJS.enc.Base64.stringify(wa).replace(/=+$/,'').replace(/\\+/g,'-').replace(/\\//g,'_');",
+              "const enc = o => b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(o)));",
+              "function sign(payload, secret) { const h = enc({alg:'HS256'}), p = enc(payload); return h + '.' + p + '.' + b64url(CryptoJS.HmacSHA256(h + '.' + p, secret)); }",
+              "const now = Math.floor(Date.now() / 1000);",
+              "pm.collectionVariables.set('expiredToken', sign({jti: 'expired-test', sub: 'bao', role: 'STUDENT', iat: now - 3600, exp: now - 1800}, pm.collectionVariables.get('jwtSecret')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. GET courses - SAI CHỮ KÝ → 401",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{badSignatureToken}}"
+          }
+        ],
+        "url": "{{gateway}}/api/courses"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401', () => pm.response.to.have.status(401));",
+              "pm.test('Bị chặn tại Gateway (JSON 401)', () => pm.expect(pm.response.json().status).to.eql(401));",
+              "pm.test('Thông báo không hợp lệ', () => pm.expect(pm.response.json().message).to.include('không hợp lệ'));"
+            ]
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Tự ký 1 JWT bằng secret dùng chung để test token hết hạn / sai chữ ký",
+              "const b64url = wa => CryptoJS.enc.Base64.stringify(wa).replace(/=+$/,'').replace(/\\+/g,'-').replace(/\\//g,'_');",
+              "const enc = o => b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(o)));",
+              "function sign(payload, secret) { const h = enc({alg:'HS256'}), p = enc(payload); return h + '.' + p + '.' + b64url(CryptoJS.HmacSHA256(h + '.' + p, secret)); }",
+              "const now = Math.floor(Date.now() / 1000);",
+              "// Ký bằng secret khác -> chữ ký không khớp",
+              "pm.collectionVariables.set('badSignatureToken', sign({jti: 'forged', sub: 'hacker', role: 'ADMIN', iat: now, exp: now + 900}, 'mot-secret-hoan-toan-khac-dai-hon-32-ky-tu-!!!'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. GET courses - STUDENT → 200 (authority từ X-User-Role)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{gateway}}/api/courses"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const u = pm.response.json().currentUser;",
+              "pm.test('Course-Service nhận authority STUDENT', () => pm.expect(u.authorities).to.eql(['STUDENT']));",
+              "pm.test('username = bao', () => pm.expect(u.username).to.eql('bao'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Giả mạo header X-User-Role: ADMIN → bị ghi đè",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          },
+          {
+            "key": "X-User-Role",
+            "value": "ADMIN"
+          }
+        ],
+        "url": "{{gateway}}/api/courses"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.test('Vẫn là STUDENT (Gateway ghi đè header giả)', () => pm.expect(pm.response.json().currentUser.authorities).to.eql(['STUDENT']));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. ★ POST course - STUDENT → 403 Forbidden",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{gateway}}/api/courses",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Khóa học của sinh viên\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403', () => pm.response.to.have.status(403));",
+              "pm.test('Bị @PreAuthorize chặn', () => pm.expect(pm.response.json().message).to.include('Forbidden'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. POST course - INSTRUCTOR → 201",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{instructorToken}}"
+          }
+        ],
+        "url": "{{gateway}}/api/courses",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Docker cho người mới\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201', () => pm.response.to.have.status(201));",
+              "pm.test('instructor = thaygiao', () => pm.expect(pm.response.json().instructor).to.eql('thaygiao'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. GET courses - INSTRUCTOR → 200",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{instructorToken}}"
+          }
+        ],
+        "url": "{{gateway}}/api/courses"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.test('authority INSTRUCTOR', () => pm.expect(pm.response.json().currentUser.authorities).to.eql(['INSTRUCTOR']));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9a. Login ADMIN",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{gateway}}/identity/api/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"username\": \"admin\", \"password\": \"admin123\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('adminToken', pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9b. GET courses - ADMIN → 403 (không có trong STUDENT/INSTRUCTOR)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{gateway}}/api/courses"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Gọi thẳng course-service :8083 không header → 401",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8083/api/courses"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

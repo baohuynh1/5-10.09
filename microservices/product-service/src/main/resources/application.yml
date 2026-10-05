@@ -1,0 +1,11 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: product-service
+
+app:
+  jwt:
+    # PHẢI giống hệt app.jwt.secret của identity-service (cùng khóa HMAC để verify chữ ký)
+    secret: ${JWT_SECRET:vS6K5vH8N2zB4xR9mQ3pL1wT7yC5vH8N2zB4xR9mQ3pL1wT7yC5vH8N2z}
